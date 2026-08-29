@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="admin-wrapper">
+
+    <div class="admin-header">
+        <div>
+            <h1>⚙️ Admin Dashboard</h1>
+            <p>Logged in as <strong>{{ username }}</strong></p>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+            <button class="icon-btn" onclick="toggleDarkMode()" id="themeBtn">🌙</button>
+            <a href="/chat" class="admin-nav-btn">💬 Chat</a>
+            <a href="/logout" class="admin-nav-btn danger">🚪 Logout</a>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-value" id="totalUsers">...</div>
+            <div class="stat-label">Total Users</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">💬</div>
+            <div class="stat-value" id="totalChats">...</div>
+            <div class="stat-label">Total Chats</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📅</div>
+            <div class="stat-value" id="chatsToday">...</div>
+            <div class="stat-label">Chats Today</div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="admin-tabs">
+        <button class="admin-tab active" onclick="switchTab('users')">👥 Users</button>
+        <button class="admin-tab" onclick="switchTab('logs')">💬 Chat Logs</button>
+    </div>
+
+    <!-- Users Table -->
+    <div class="admin-section" id="usersSection">
+        <div class="section-header">
+            <h2>👥 All Users</h2>
+            <button class="refresh-btn" onclick="loadUsers()">↻ Refresh</button>
+        </div>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Joined</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="usersTable">
+                <tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="admin-section" id="logsSection" style="display:none">
+        <div class="section-header">
+            <h2>💬 All Chat Logs</h2>
+            <button class="refresh-btn" onclick="loadLogs()">↻ Refresh</button>
+        </div>
+        <table class="admin-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Username</th>
+                    <th>Title</th>
+                    <th>Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="logsTable">
+                <tr><td colspan="5" style="text-align:center;padding:20px;color:#888;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+<script>
+    window.addEventListener("load", () => {
+        const saved = localStorage.getItem("theme") || "light";
+        document.documentElement.setAttribute("data-theme", saved);
+        document.getElementById("themeBtn").textContent = saved === "dark" ? "☀️" : "🌙";
+        loadStats();
+        loadUsers();
+    });
+
+    function toggleDarkMode() {
+        const html = document.documentElement;
+        const isDark = html.getAttribute("data-theme") === "dark";
+        html.setAttribute("data-theme", isDark ? "light" : "dark");
+        document.getElementById("themeBtn").textContent = isDark ? "🌙" : "☀️";
+        localStorage.setItem("theme", isDark ? "light" : "dark");
+    }
+
+    async function loadStats() {
+        const res = await fetch("/admin/stats");
+        const data = await res.json();
+        document.getElementById("totalUsers").textContent = data.total_users;
+        document.getElementById("totalChats").textContent = data.total_chats;
+        document.getElementById("chatsToday").textContent = data.chats_today;
+    }
+
+    async function loadUsers() {
+        const res = await fetch("/admin/users");
+        const data = await res.json();
+        const tbody = document.getElementById("usersTable");
+        if (!data.users.length) {
+            tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;padding:20px;color:#888;'>No users found</td></tr>";
+            return;
+        }
+        tbody.innerHTML = data.users.map(u => `
+            <tr>
+                <td>${u.id}</td>
+                <td><strong>${u.username}</strong></td>
+                <td><span class="badge ${u.is_admin ? 'badge-admin' : 'badge-user'}">
+                    ${u.is_admin ? "Admin" : "User"}
+                </span></td>
+                <td>${u.created_at.slice(0, 10)}</td>
+                <td>
+                    ${!u.is_admin
+                        ? `<button class="table-btn danger" onclick="deleteUser('${u.username}')">🗑️ Delete</button>`
+                        : `<span style="color:#999;font-size:0.8rem;">Protected</span>`
+                    }
+                </td>
+            </tr>
+        `).join("");
+    }
+
+    async function loadLogs() {
+        const res = await fetch("/admin/logs");
+        const data = await res.json();
+        const tbody = document.getElementById("logsTable");
+        if (!data.logs.length) {
+            tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;padding:20px;color:#888;'>No logs found</td></tr>";
+            return;
+        }
+        tbody.innerHTML = data.logs.map(log => `
+            <tr>
+                <td>${log.id}</td>
+                <td>${log.username}</td>
+                <td>${log.title}</td>
+                <td>${log.created_at.slice(0, 16)}</td>
+                <td style="display:flex;gap:5px;flex-wrap:wrap;">
+                    <a href="/admin/download-log/${log.id}?format=pdf" class="table-btn">📄 PDF</a>
+                    <a href="/admin/download-log/${log.id}?format=json" class="table-btn">📋 JSON</a>
+                    <button class="table-btn danger" onclick="deleteLog(${log.id})">🗑️ Delete</button>
+                </td>
+            </tr>
+        `).join("");
+    }
+
+    async function deleteUser(username) {
+        if (!confirm(`Delete user "${username}" and all their data?`)) return;
+        const res = await fetch(`/admin/delete-user/${username}`, { method: "DELETE" });
+        const data = await res.json();
+        if (data.success) { loadUsers(); loadStats(); }
+        else alert("Error: " + data.error);
+    }
+
+    async function deleteLog(id) {
+        if (!confirm("Delete this chat log?")) return;
+        await fetch(`/admin/delete-log/${id}`, { method: "DELETE" });
+        loadLogs();
+        loadStats();
+    }
+
+    function switchTab(tab) {
+        document.querySelectorAll(".admin-tab").forEach((t, i) => {
+            t.classList.toggle("active", (i === 0 && tab === "users") || (i === 1 && tab === "logs"));
+        });
+        document.getElementById("usersSection").style.display = tab === "users" ? "block" : "none";
+        document.getElementById("logsSection").style.display = tab === "logs" ? "block" : "none";
+        if (tab === "logs") loadLogs();
+    }
+</script>
+
+</body>
+</html>

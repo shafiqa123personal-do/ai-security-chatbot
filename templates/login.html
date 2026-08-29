@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Security Chatbot - Login</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+
+        body {
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header .icon { font-size: 3rem; margin-bottom: 10px; }
+        .login-header h1 { font-size: 1.5rem; color: #333; }
+        .login-header p { color: #888; font-size: 0.85rem; margin-top: 4px; }
+
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 25px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            background: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            color: #888;
+            transition: all 0.2s;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .form-group { margin-bottom: 16px; }
+
+        .form-group label {
+            display: block;
+            font-size: 0.82rem;
+            color: #555;
+            margin-bottom: 6px;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus { border-color: #667eea; }
+
+        .submit-btn {
+            width: 100%;
+            padding: 13px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            margin-top: 5px;
+            transition: opacity 0.2s;
+        }
+
+        .submit-btn:hover { opacity: 0.9; }
+        .submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .message {
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .message.error { background: #ffe0e0; color: #cc0000; }
+        .message.success { background: #e0ffe6; color: #006622; }
+
+        .optional-tag {
+            font-size: 0.72rem;
+            color: #aaa;
+            font-weight: normal;
+            margin-left: 4px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-card">
+    <div class="login-header">
+        <div class="icon">🤖</div>
+        <h1>AI Security Chatbot</h1>
+        <p>Powered by Claude AI</p>
+    </div>
+
+    <div class="tabs">
+        <button class="tab active" onclick="showTab('login')">Login</button>
+        <button class="tab" onclick="showTab('register')">Register</button>
+    </div>
+
+    <!-- Login Form -->
+    <div id="loginForm">
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="loginUsername" placeholder="Enter username"
+                   onkeypress="if(event.key==='Enter') doLogin()" />
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="loginPassword" placeholder="Enter password"
+                   onkeypress="if(event.key==='Enter') doLogin()" />
+        </div>
+        <button class="submit-btn" onclick="doLogin()" id="loginBtn">Login</button>
+        <div class="message" id="loginMsg"></div>
+    </div>
+
+    <!-- Register Form -->
+    <div id="registerForm" style="display:none">
+        <div class="form-group">
+            <label>Username</label>
+            <input type="text" id="regUsername" placeholder="At least 3 characters"
+                   onkeypress="if(event.key==='Enter') doRegister()" />
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" id="regPassword" placeholder="At least 6 characters"
+                   onkeypress="if(event.key==='Enter') doRegister()" />
+        </div>
+        <div class="form-group" id="emailGroup">
+            <label>Email <span class="optional-tag">(optional — for welcome email)</span></label>
+            <input type="email" id="regEmail" placeholder="your@email.com"
+                   onkeypress="if(event.key==='Enter') doRegister()" />
+        </div>
+        <button class="submit-btn" onclick="doRegister()" id="registerBtn">Create Account</button>
+        <div class="message" id="registerMsg"></div>
+    </div>
+</div>
+
+<script>
+    function showTab(tab) {
+        document.getElementById("loginForm").style.display = tab === "login" ? "block" : "none";
+        document.getElementById("registerForm").style.display = tab === "register" ? "block" : "none";
+        document.querySelectorAll(".tab").forEach((t, i) => {
+            t.classList.toggle("active", (i === 0 && tab === "login") || (i === 1 && tab === "register"));
+        });
+    }
+
+    function showMsg(id, text, type) {
+        const el = document.getElementById(id);
+        el.textContent = text;
+        el.className = `message ${type}`;
+        el.style.display = "block";
+    }
+
+    async function doLogin() {
+        const username = document.getElementById("loginUsername").value.trim();
+        const password = document.getElementById("loginPassword").value.trim();
+        if (!username || !password) { showMsg("loginMsg", "Please fill in all fields", "error"); return; }
+
+        const btn = document.getElementById("loginBtn");
+        btn.disabled = true;
+        btn.textContent = "Logging in...";
+
+        try {
+            const res = await fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "login", username, password })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showMsg("loginMsg", "Success! Redirecting...", "success");
+                window.location.href = "/chat";
+            } else {
+                showMsg("loginMsg", data.error || "Login failed", "error");
+                btn.disabled = false;
+                btn.textContent = "Login";
+            }
+        } catch {
+            showMsg("loginMsg", "Connection error", "error");
+            btn.disabled = false;
+            btn.textContent = "Login";
+        }
+    }
+
+    async function doRegister() {
+        const username = document.getElementById("regUsername").value.trim();
+        const password = document.getElementById("regPassword").value.trim();
+        const email = document.getElementById("regEmail").value.trim();
+        if (!username || !password) { showMsg("registerMsg", "Please fill in all fields", "error"); return; }
+
+        const btn = document.getElementById("registerBtn");
+        btn.disabled = true;
+        btn.textContent = "Creating account...";
+
+        try {
+            const res = await fetch("/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "register", username, password, email })
+            });
+            const data = await res.json();
+            if (data.success) {
+                showMsg("registerMsg", "Account created! Redirecting...", "success");
+                window.location.href = "/chat";
+            } else {
+                showMsg("registerMsg", data.error || "Registration failed", "error");
+                btn.disabled = false;
+                btn.textContent = "Create Account";
+            }
+        } catch {
+            showMsg("registerMsg", "Connection error", "error");
+            btn.disabled = false;
+            btn.textContent = "Create Account";
+        }
+    }
+</script>
+
+</body>
+</html>

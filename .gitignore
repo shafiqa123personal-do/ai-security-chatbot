@@ -1,0 +1,6 @@
+.env
+chatbot.db
+uploads/
+__pycache__/
+*.pyc
+.DS_Store

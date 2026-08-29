@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Security Chatbot</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<div class="app-wrapper">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h3>💬 Chat History</h3>
+            <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+        </div>
+
+        <button class="new-chat-btn" onclick="newChat()">+ New Chat</button>
+
+        <div class="sidebar-search">
+            <input type="text" id="searchInput" placeholder="🔍 Search chats..."
+                   oninput="filterLogs(this.value)" />
+            <button class="search-clear" id="searchClear" onclick="clearSearch()" style="display:none">✕</button>
+        </div>
+
+        <div class="sidebar-logs" id="sidebarLogs">
+            <p class="no-logs">No saved chats yet</p>
+        </div>
+
+        <div class="no-results" id="noResults" style="display:none">
+            <span>No chats match your search</span>
+        </div>
+    </div>
+
+    <!-- MAIN CHAT -->
+    <div class="chat-container">
+
+        <!-- Header -->
+        <div class="chat-header">
+            <button class="icon-btn" onclick="toggleSidebar()" title="Chat History">☰</button>
+            <div class="header-icon">🤖</div>
+            <div class="header-text">
+                <h2>AI Security Chatbot</h2>
+                <p>Welcome, <strong>{{ username }}</strong></p>
+            </div>
+            <div class="header-actions">
+                <button class="icon-btn" onclick="toggleDarkMode()" id="themeBtn" title="Toggle Dark Mode">🌙</button>
+                <button class="icon-btn" onclick="saveLog()" title="Save Chat">💾</button>
+                {% if is_admin %}
+                <a href="/admin" class="icon-btn" title="Admin Dashboard">⚙️</a>
+                {% endif %}
+                <a href="/logout" class="icon-btn" title="Logout">🚪</a>
+            </div>
+        </div>
+
+        <!-- PDF Bar -->
+        <div class="pdf-bar">
+            <span id="pdfStatus">📄 No PDF — using default AI security knowledge</span>
+            <div class="pdf-actions">
+                <label for="pdfInput" class="pdf-btn">Upload PDF</label>
+                <input type="file" id="pdfInput" accept=".pdf" onchange="uploadPDF(this)" hidden />
+                <button class="pdf-btn remove-btn" onclick="removePDF()" id="removePdfBtn" style="display:none">Remove</button>
+            </div>
+        </div>
+
+        <!-- Suggestions -->
+        <div class="suggestions">
+            <div class="suggestion-chips">
+                <button onclick="sendSuggestion('What is a backdoor attack?')">Backdoor Attack</button>
+                <button onclick="sendSuggestion('Explain FGSM')">FGSM</button>
+                <button onclick="sendSuggestion('What is sensor spoofing?')">Sensor Spoofing</button>
+                <button onclick="sendSuggestion('List all defenses against adversarial attacks')">Defenses</button>
+                <button onclick="sendSuggestion('Summarize the paper simply')">Summary</button>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot-message">
+                <div class="message-icon">🤖</div>
+                <div class="message-content">
+                    Hello <strong>{{ username }}</strong>! Ask me anything about AI security,
+                    or upload a PDF to chat with your own document.
+                </div>
+            </div>
+        </div>
+
+        <!-- Input -->
+        <div class="chat-input-area">
+            <input type="text" id="userInput"
+                   placeholder="Ask about AI security..."
+                   onkeypress="if(event.key==='Enter') sendMessage()" />
+            <button class="send-btn" onclick="sendMessage()" id="sendBtn">Send ➤</button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Save Log Modal -->
+<div class="modal" id="saveModal">
+    <div class="modal-content small">
+        <h3>💾 Save Chat</h3>
+        <input type="text" id="logTitle" placeholder="Enter chat title..." />
+        <div class="modal-actions">
+            <button class="modal-btn cancel" onclick="closeModal('saveModal')">Cancel</button>
+            <button class="modal-btn confirm" onclick="confirmSave()">Save</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let allLogs = [];
+
+    // ── Dark Mode ──────────────────────────────────────────
+    function toggleDarkMode() {
+        const html = document.documentElement;
+        const isDark = html.getAttribute("data-theme") === "dark";
+        html.setAttribute("data-theme", isDark ? "light" : "dark");
+        document.getElementById("themeBtn").textContent = isDark ? "🌙" : "☀️";
+        localStorage.setItem("theme", isDark ? "light" : "dark");
+    }
+
+    window.addEventListener("load", () => {
+        const saved = localStorage.getItem("theme") || "light";
+        document.documentElement.setAttribute("data-theme", saved);
+        document.getElementById("themeBtn").textContent = saved === "dark" ? "☀️" : "🌙";
+        loadSidebarLogs();
+    });
+
+    // ── Sidebar ────────────────────────────────────────────
+    function toggleSidebar() {
+        document.getElementById("sidebar").classList.toggle("open");
+        loadSidebarLogs();
+    }
+
+    async function loadSidebarLogs() {
+        const res = await fetch("/my-logs");
+        const data = await res.json();
+        allLogs = data.logs || [];
+        renderLogs(allLogs);
+    }
+
+    function renderLogs(logs) {
+        const container = document.getElementById("sidebarLogs");
+        const noResults = document.getElementById("noResults");
+
+        if (!logs.length && allLogs.length === 0) {
+            container.innerHTML = "<p class='no-logs'>No saved chats yet</p>";
+            noResults.style.display = "none";
+            return;
+        }
+
+        if (!logs.length) {
+            container.innerHTML = "";
+            noResults.style.display = "block";
+            return;
+        }
+
+        noResults.style.display = "none";
+        const query = document.getElementById("searchInput").value.trim().toLowerCase();
+
+        container.innerHTML = logs.map(log => {
+            const title = query ? highlightMatch(log.title, query) : log.title;
+            return `
+                <div class="sidebar-log-item" id="log-${log.id}">
+                    <div class="log-info" onclick="loadLog(${log.id})">
+                        <span class="log-title">💬 ${title}</span>
+                        <span class="log-date">${log.created_at.slice(0, 16)}</span>
+                    </div>
+                    <div class="log-actions">
+                        <div class="download-menu" id="dl-${log.id}">
+                            <button class="log-dl-btn" onclick="toggleDownloadMenu(${log.id})" title="Download">⬇️</button>
+                            <div class="download-options" id="dl-opts-${log.id}" style="display:none">
+                                <a href="/download-log/${log.id}?format=pdf" target="_blank">📄 PDF</a>
+                                <a href="/download-log/${log.id}?format=json" target="_blank">📋 JSON</a>
+                            </div>
+                        </div>
+                        <button onclick="deleteLog(${log.id})" title="Delete">🗑️</button>
+                    </div>
+                </div>
+            `;
+        }).join("");
+    }
+
+    function highlightMatch(text, query) {
+        const index = text.toLowerCase().indexOf(query);
+        if (index === -1) return text;
+        const before = text.slice(0, index);
+        const match = text.slice(index, index + query.length);
+        const after = text.slice(index + query.length);
+        return `${before}<mark class="search-highlight">${match}</mark>${after}`;
+    }
+
+    function filterLogs(query) {
+        document.getElementById("searchClear").style.display = query.length > 0 ? "inline-block" : "none";
+        if (!query.trim()) { renderLogs(allLogs); return; }
+        const filtered = allLogs.filter(log => log.title.toLowerCase().includes(query.toLowerCase()));
+        renderLogs(filtered);
+    }
+
+    function clearSearch() {
+        const input = document.getElementById("searchInput");
+        input.value = "";
+        document.getElementById("searchClear").style.display = "none";
+        renderLogs(allLogs);
+        input.focus();
+    }
+
+    function toggleDownloadMenu(id) {
+        const opts = document.getElementById(`dl-opts-${id}`);
+        const isOpen = opts.style.display === "block";
+        document.querySelectorAll(".download-options").forEach(el => el.style.display = "none");
+        opts.style.display = isOpen ? "none" : "block";
+    }
+
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest(".download-menu")) {
+            document.querySelectorAll(".download-options").forEach(el => el.style.display = "none");
+        }
+    });
+
+    async function loadLog(id) {
+        const res = await fetch(`/load-log/${id}`);
+        const data = await res.json();
+        if (data.error) return;
+        const chatMessages = document.getElementById("chatMessages");
+        chatMessages.innerHTML = "";
+        data.messages.forEach(msg => addMessage(msg.content, msg.role === "user" ? "user" : "bot"));
+        document.getElementById("sidebar").classList.remove("open");
+    }
+
+    async function deleteLog(id) {
+        if (!confirm("Delete this chat log?")) return;
+        await fetch(`/delete-log/${id}`, { method: "DELETE" });
+        allLogs = allLogs.filter(l => l.id !== id);
+        renderLogs(allLogs);
+    }
+
+    function newChat() {
+        clearChat();
+        document.getElementById("sidebar").classList.remove("open");
+    }
+
+    // ── Chat ───────────────────────────────────────────────
+    function sendSuggestion(text) {
+        document.getElementById("userInput").value = text;
+        sendMessage();
+    }
+
+    async function sendMessage() {
+        const input = document.getElementById("userInput");
+        const message = input.value.trim();
+        if (!message) return;
+
+        input.value = "";
+        input.disabled = true;
+        document.getElementById("sendBtn").disabled = true;
+
+        addMessage(message, "user");
+        showTyping();
+
+        try {
+            const res = await fetch("/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message })
+            });
+            const data = await res.json();
+            removeTyping();
+            addMessage(data.error || data.response, "bot");
+        } catch {
+            removeTyping();
+            addMessage("Connection error. Please try again.", "bot");
+        }
+
+        input.disabled = false;
+        document.getElementById("sendBtn").disabled = false;
+        input.focus();
+    }
+
+    function addMessage(text, sender) {
+        const chatMessages = document.getElementById("chatMessages");
+        const div = document.createElement("div");
+        div.className = `message ${sender}-message`;
+
+        const icon = document.createElement("div");
+        icon.className = "message-icon";
+        icon.textContent = sender === "user" ? "👤" : "🤖";
+
+        const content = document.createElement("div");
+        content.className = "message-content";
+        content.innerHTML = formatMessage(text);
+
+        if (sender === "user") {
+            div.appendChild(content);
+            div.appendChild(icon);
+        } else {
+            div.appendChild(icon);
+            div.appendChild(content);
+        }
+
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function formatMessage(text) {
+        text = text.replace(/\n/g, "<br>");
+        text = text.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+        return text;
+    }
+
+    function showTyping() {
+        const chatMessages = document.getElementById("chatMessages");
+        const div = document.createElement("div");
+        div.className = "message bot-message";
+        div.id = "typingIndicator";
+        div.innerHTML = `
+            <div class="message-icon">🤖</div>
+            <div class="message-content typing">
+                <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            </div>`;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function removeTyping() {
+        document.getElementById("typingIndicator")?.remove();
+    }
+
+    async function clearChat() {
+        await fetch("/clear", { method: "POST" });
+        document.getElementById("chatMessages").innerHTML = `
+            <div class="message bot-message">
+                <div class="message-icon">🤖</div>
+                <div class="message-content">Chat cleared! Ask me anything.</div>
+            </div>`;
+    }
+
+    // ── PDF ────────────────────────────────────────────────
+    async function uploadPDF(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const formData = new FormData();
+        formData.append("pdf", file);
+        document.getElementById("pdfStatus").textContent = "Loading PDF...";
+        try {
+            const res = await fetch("/upload-pdf", { method: "POST", body: formData });
+            const data = await res.json();
+            if (data.success) {
+                document.getElementById("pdfStatus").textContent = `✅ ${file.name} (${data.pages} pages)`;
+                document.getElementById("removePdfBtn").style.display = "inline-block";
+            } else {
+                document.getElementById("pdfStatus").textContent = `❌ ${data.error}`;
+            }
+        } catch {
+            document.getElementById("pdfStatus").textContent = "❌ Upload failed";
+        }
+    }
+
+    async function removePDF() {
+        await fetch("/remove-pdf", { method: "POST" });
+        document.getElementById("pdfStatus").textContent = "📄 No PDF — using default AI security knowledge";
+        document.getElementById("removePdfBtn").style.display = "none";
+        document.getElementById("pdfInput").value = "";
+    }
+
+    // ── Save Log ───────────────────────────────────────────
+    function saveLog() {
+        const now = new Date();
+        document.getElementById("logTitle").value =
+            `Chat ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+        document.getElementById("saveModal").style.display = "flex";
+    }
+
+    async function confirmSave() {
+        const title = document.getElementById("logTitle").value.trim() || "Untitled Chat";
+        closeModal("saveModal");
+        const res = await fetch("/save-log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title })
+        });
+        const data = await res.json();
+        alert(data.success ? "Chat saved!" : "Error: " + data.error);
+        loadSidebarLogs();
+    }
+
+    function closeModal(id) {
+        document.getElementById(id).style.display = "none";
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,7 @@
+google-genai
+flask
+pypdf
+werkzeug
+python-dotenv
+gunicorn
+reportlab
