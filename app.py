@@ -231,7 +231,7 @@ def send_message():
                 parts=[types.Part(text=msg["content"])]
             ))
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash-lite",
+            model="gemini-3.5-flash-lite",
             contents=gemini_history + [types.Content(
                 role="user",
                 parts=[types.Part(text=user_message)]
